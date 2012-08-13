@@ -1,0 +1,7 @@
+[
+	{
+		"caption": "Serpentarium: Rebuild tags",
+		"command": "serpentarium_rebuild",
+		"args": {}
+	}
+]

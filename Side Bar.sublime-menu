@@ -1,0 +1,6 @@
+[
+	{ "caption": "-" },
+	{ "caption": "Serpentarium: Setup project", "command": "serpentarium_setup", "args": {"paths": []} },
+	{ "caption": "Serpentarium: Rebuild tags", "command": "serpentarium_rebuild", "args": {"paths": []} },
+	{ "caption": "-", "id": "end" }
+]
