@@ -64,6 +64,24 @@ class Serpentarium(object):
                                              'serpentarium.json')
         return self._config_filename
 
+    def check_ctags(self):
+        """
+        Check for ctags installed if ctags enabled
+        """
+        ctags_cmd = settings.get('ctags_cmd')
+        if ctags_cmd:
+            if not os.path.exists(ctags_cmd):
+                sublime.error_message((
+                    "Ctags is not found in '%s'. Please, install ctags."
+                ) % ctags_cmd)
+                return False
+        else:
+            sublime.error_message(
+                "Ctags are enabled, but ctags_cmd is not defined in config"
+            )
+            return False
+        return True
+
     def get_path(self, paths=None):
         """
         Get first path from paths list or current view path
@@ -159,14 +177,19 @@ class SerpentariumSetupCommand(sublime_plugin.WindowCommand, Serpentarium):
         path = self.get_path(paths)
         config_file = self.get_config_file(path)
 
+        if settings.get('ctags_enabled') and not self.check_ctags():
+            return False
+
+        # clone default project config file if not exists
         if not config_file:
             if not os.path.isdir(path):
                 path = os.path.dirname(path)
             config_file = os.path.join(path, self.get_config_filename)
 
             default_config = os.path.join(
-                os.path.dirname(os.path.abspath(__file__)),
-                "Serpentarium.default-config"
+                sublime.packages_path(),
+                'Serpentarium',
+                'Serpentarium.default-config'
             )
             with open(default_config, 'r') as read_config:
                 with open(config_file, 'w') as write_config:
@@ -200,6 +223,9 @@ class SerpentariumRebuildCommand(sublime_plugin.WindowCommand, Serpentarium):
         config_file = self.get_config_file(path)
         if config_file is None:
             return
+
+        if build_ctags and not self.check_ctags():
+            return False
 
         config = self.parse_config(path)
         if config is None:
