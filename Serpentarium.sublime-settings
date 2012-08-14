@@ -5,7 +5,9 @@
 	// CTags settings
 	"ctags_enabled": true,
 	"ctags_cmd": "/usr/local/bin/ctags",
-	"ctags_args": [],
+	"ctags_args": [
+		"--python-kinds=-i"
+	],
 	"ctags_rebuild_on_save": true,
 
 	// CScope settings

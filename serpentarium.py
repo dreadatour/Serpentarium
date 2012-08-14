@@ -248,6 +248,7 @@ class SerpentariumRebuildCommand(sublime_plugin.WindowCommand, Serpentarium):
         if build_ctags:
             ctags = {
                 "cmd": settings.get('ctags_cmd'),
+                "args": settings.get('ctags_args'),
                 "out": self.get_ctags_file(path),
             }
         else:
@@ -294,7 +295,12 @@ class SerpentariumRebuildCommand(sublime_plugin.WindowCommand, Serpentarium):
             raise EnvironmentError((cmd, ret, p.stdout.read()))
 
         if ctags is not None:
-            cmd = "%s -L '%s' -f '%s'" % (ctags['cmd'], tmpfile, ctags['out'])
+            cmd = "%s %s -L '%s' -f '%s'" % (
+                ctags['cmd'],
+                ' '.join(ctags['args']),
+                tmpfile,
+                ctags['out'],
+            )
             p = subprocess.Popen(cmd, shell=1, stdout=subprocess.PIPE,
                                  stderr=subprocess.STDOUT)
             ret = p.wait()
