@@ -3,8 +3,11 @@
 		"caption": "-"
 	},
 	{
-		"command": "serpentarium_jump_to_definition",
-		"args": {},
-		"caption": "Jump to Definition"
+		"caption": "Jump to definition",
+		"command": "serpentarium_jump_to_definition"
+	},
+	{
+		"caption": "Jump back",
+		"command": "serpentarium_jump_back"
 	}
 ]

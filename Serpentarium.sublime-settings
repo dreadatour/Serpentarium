@@ -1,6 +1,8 @@
 {
 	// This file will be created in project dir
 	"project_config_filename": "serpentarium.json",
+	// Jump to definition without prompt if only one result
+	"instant_jump_to_definition": true,
 
 	// CTags settings
 	"ctags_enabled": true,

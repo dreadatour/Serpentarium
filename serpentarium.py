@@ -14,7 +14,8 @@ from ctags import CTags
 
 settings = sublime.load_settings("Serpentarium.sublime-settings")
 
-cache_ctags = None
+ctags = None
+history = []
 
 
 def threaded(finish=None, msg="Thread already running"):
@@ -173,11 +174,11 @@ class Serpentarium(object):
         ctags_file = os.path.join(config_dir, ctags_file)
         return os.path.abspath(os.path.normpath(ctags_file))
 
-    def open_file_and_goto_line(self, view, filename, line):
+    def goto_file(self, view, filename, row, col=0):
         """
         Open file and scroll to line number
         """
-        view.window().open_file("%s:%d" % (filename, line),
+        view.window().open_file("%s:%d:%d" % (filename, row, col),
                                 sublime.ENCODED_POSITION)
 
 
@@ -285,8 +286,8 @@ class SerpentariumRebuildCommand(sublime_plugin.WindowCommand, Serpentarium):
         Build tags os over - cleanup
         """
         if is_ok:
-            global cache_ctags
-            cache_ctags = tags
+            global ctags
+            ctags = tags
             if not silent:
                 sublime.status_message('Tags rebuilded')
         else:
@@ -332,9 +333,29 @@ class SerpentariumRebuildCommand(sublime_plugin.WindowCommand, Serpentarium):
 
 class SerpentariumJumpToDefinition(sublime_plugin.TextCommand, Serpentarium):
     """
-    Jump to tag under cursor definition
+    Jump to word under cursor definition
     """
+    def is_visible(self):
+        """
+        Is command visible?
+        """
+        # skip non-python files
+        return self.view.match_selector(0, 'source.python')
+
+    def is_enabled(self):
+        """
+        Is command active?
+        """
+        # check ctags is exists
+        ctags_file = self.get_ctags_file(self.view.file_name())
+        if ctags_file is None or not os.path.exists(ctags_file):
+            return False
+        return True
+
     def run(self, edit):
+        """
+        Run command - let's jump to word under cursor definition!
+        """
         # skip non-python files
         if not self.view.match_selector(0, 'source.python'):
             return
@@ -345,13 +366,13 @@ class SerpentariumJumpToDefinition(sublime_plugin.TextCommand, Serpentarium):
             return []
 
         # check ctags is prepared - prepare if needed
-        global cache_ctags
-        if cache_ctags is None:
-            cache_ctags = CTags(tags_file=ctags_file)
+        global ctags
+        if ctags is None:
+            ctags = CTags(tags_file=ctags_file)
 
         symbol = self.view.substr(self.view.word(self.view.sel()[0]))
 
-        definitions = cache_ctags.get_definitions(symbol, self.view)
+        definitions = ctags.get_definitions(symbol, self.view)
         if not definitions:
             return sublime.status_message("Can't find '%s'" % symbol)
 
@@ -359,16 +380,52 @@ class SerpentariumJumpToDefinition(sublime_plugin.TextCommand, Serpentarium):
             if choose == -1:
                 return
 
-            self.open_file_and_goto_line(
+            row, col = self.view.rowcol(self.view.sel()[0].begin())
+            history.append((self.view.file_name(), row + 1, col + 1))
+
+            self.goto_file(
                 view=self.view,
                 filename=definitions[choose][1],
-                line=definitions[choose][2]
+                row=definitions[choose][2],
+                col=0
             )
 
-        self.view.window().show_quick_panel(
-            [[d[0], "%d: %s" % (d[2], d[1])] for d in definitions],
-            select_definition
-        )
+        instant_jump = settings.get('instant_jump_to_definition', False)
+        if len(definitions) == 1 and instant_jump:
+            select_definition(0)
+        else:
+            self.view.window().show_quick_panel(
+                [[d[0], "%d: %s" % (d[2], d[1])] for d in definitions],
+                select_definition
+            )
+
+
+class SerpentariumJumpBack(sublime_plugin.TextCommand, Serpentarium):
+    """
+    Jump back from definition
+    """
+    def is_visible(self):
+        """
+        Is command visible?
+        """
+        # skip non-python files
+        return self.view.match_selector(0, 'source.python')
+
+    def is_enabled(self):
+        """
+        Is command active?
+        """
+        return True if history else False
+
+    def run(self, edit):
+        """
+        Run command - jump back
+        """
+        if not history:
+            return sublime.status_message("Jump history is empty")
+
+        filename, row, col = history.pop()
+        self.goto_file(view=self.view, filename=filename, row=row, col=col)
 
 
 class SerpentariumBackground(sublime_plugin.EventListener, Serpentarium):
@@ -400,9 +457,9 @@ class SerpentariumBackground(sublime_plugin.EventListener, Serpentarium):
             return []
 
         # check ctags is prepared - prepare if needed
-        global cache_ctags
-        if cache_ctags is None:
-            cache_ctags = CTags(tags_file=ctags_file)
+        global ctags
+        if ctags is None:
+            ctags = CTags(tags_file=ctags_file)
 
         # do autocomplete work
-        return cache_ctags.autocomplete(view, prefix, locations)
+        return ctags.autocomplete(view, prefix, locations)
