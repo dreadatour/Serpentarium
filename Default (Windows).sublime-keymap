@@ -1,2 +1,3 @@
-{
-}
+[
+    { "keys": ["ctrl+]"], "command": "serpentarium_jump_to_definition" }
+]

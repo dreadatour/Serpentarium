@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import os
+import re
 import json
 import tempfile
 import functools
@@ -9,12 +10,16 @@ import subprocess
 import sublime
 import sublime_plugin
 
+from ctags import CTags
+
 settings = sublime.load_settings("Serpentarium.sublime-settings")
+
+cache_ctags = None
 
 
 def threaded(finish=None, msg="Thread already running"):
     """
-    This decorator is stealed from Sublime Text 2 'CTags' plugin ;)
+    Run procedure in thread
     """
     def decorator(func):
         func.running = 0
@@ -50,6 +55,9 @@ def threaded(finish=None, msg="Thread already running"):
 
 
 class Serpentarium(object):
+    """
+    Serpentarium base class
+    """
     @property
     def get_config_filename(self):
         """
@@ -165,6 +173,13 @@ class Serpentarium(object):
         ctags_file = os.path.join(config_dir, ctags_file)
         return os.path.abspath(os.path.normpath(ctags_file))
 
+    def open_file_and_goto_line(self, view, filename, line):
+        """
+        Open file and scroll to line number
+        """
+        view.window().open_file("%s:%d" % (filename, line),
+                                sublime.ENCODED_POSITION)
+
 
 class SerpentariumSetupCommand(sublime_plugin.WindowCommand, Serpentarium):
     """
@@ -265,19 +280,19 @@ class SerpentariumRebuildCommand(sublime_plugin.WindowCommand, Serpentarium):
 
         self.build_tags(folders, ctags, cscope, silent)
 
-    def build_is_done(self, finished=False, tmpfile=None, silent=False):
+    def build_is_done(self, is_ok=False, tags=None, silent=False):
         """
         Build tags os over - cleanup
         """
-        if tmpfile is not None and os.path.exists(tmpfile):
-            os.unlink(tmpfile)
-
-        if not finished:
+        if is_ok:
+            global cache_ctags
+            cache_ctags = tags
+            if not silent:
+                sublime.status_message('Tags rebuilded')
+        else:
             sublime.status_message(
                 'Tags NOT rebuilded! See console for more information.'
             )
-        elif not silent:
-            sublime.status_message('Tags rebuilded')
 
     @threaded(finish=build_is_done, msg="Build process is running alredy")
     def build_tags(self, folders=None, ctags=None, cscope=None, silent=False):
@@ -295,7 +310,7 @@ class SerpentariumRebuildCommand(sublime_plugin.WindowCommand, Serpentarium):
             raise EnvironmentError((cmd, ret, p.stdout.read()))
 
         if ctags is not None:
-            cmd = "%s %s -L '%s' -f '%s'" % (
+            cmd = "%s %s --fields=+nz -L '%s' -f '%s'" % (
                 ctags['cmd'],
                 ' '.join(ctags['args']),
                 tmpfile,
@@ -307,14 +322,53 @@ class SerpentariumRebuildCommand(sublime_plugin.WindowCommand, Serpentarium):
             if ret:
                 raise EnvironmentError((cmd, ret, p.stdout.read()))
 
-        return True, tmpfile, silent
+        tags = CTags(tags_file=ctags['out'])
+
+        if tmpfile is not None and os.path.exists(tmpfile):
+            os.unlink(tmpfile)
+
+        return True, tags, silent
 
 
 class SerpentariumJumpToDefinition(sublime_plugin.TextCommand, Serpentarium):
     """
     Jump to tag under cursor definition
     """
-    pass
+    def run(self, edit):
+        # skip non-python files
+        if not self.view.match_selector(0, 'source.python'):
+            return
+
+        # check ctags is exists
+        ctags_file = self.get_ctags_file(self.view.file_name())
+        if ctags_file is None or not os.path.exists(ctags_file):
+            return []
+
+        # check ctags is prepared - prepare if needed
+        global cache_ctags
+        if cache_ctags is None:
+            cache_ctags = CTags(tags_file=ctags_file)
+
+        symbol = self.view.substr(self.view.word(self.view.sel()[0]))
+
+        definitions = cache_ctags.get_definitions(symbol, self.view)
+        if not definitions:
+            return sublime.status_message("Can't find '%s'" % symbol)
+
+        def select_definition(choose):
+            if choose == -1:
+                return
+
+            self.open_file_and_goto_line(
+                view=self.view,
+                filename=definitions[choose][1],
+                line=definitions[choose][2]
+            )
+
+        self.view.window().show_quick_panel(
+            [[d[0], "%d: %s" % (d[2], d[1])] for d in definitions],
+            select_definition
+        )
 
 
 class SerpentariumBackground(sublime_plugin.EventListener, Serpentarium):
@@ -323,29 +377,32 @@ class SerpentariumBackground(sublime_plugin.EventListener, Serpentarium):
     """
     def on_post_save(self, view):
         """
-        Rebuild ctags and cscope on save if needed
+        Rebuild ctags and cscope on python source file save
         """
+        # skip non-python files
+        if not view.match_selector(0, 'source.python'):
+            return
+
         # TODO: respect 'XXX_rebuild_on_save' setting
         view.window().run_command('serpentarium_rebuild', {'silent': True})
 
     def on_query_completions(self, view, prefix, locations):
         """
-        Autocomplete
-        Example: https://gist.github.com/1825401
+        Extend autocomplete results with ctags
         """
-        results = []
+        # skip non-python files
+        if not view.match_selector(0, 'source.python'):
+            return []
 
+        # check ctags is exists
         ctags_file = self.get_ctags_file(view.file_name())
         if ctags_file is None or not os.path.exists(ctags_file):
-            return results
+            return []
 
-        f = os.popen("grep -i '^%s' '%s' | awk '{print $1}'" % (prefix,
-                                                                ctags_file))
-        for line in f.readlines():
-            results.append([line.strip()])
+        # check ctags is prepared - prepare if needed
+        global cache_ctags
+        if cache_ctags is None:
+            cache_ctags = CTags(tags_file=ctags_file)
 
-        results = [(i, i) for sublist in results for i in sublist]  # flatten
-        results = list(set(results))  # make unique
-        results.sort()  # sort
-
-        return results
+        # do autocomplete work
+        return cache_ctags.autocomplete(view, prefix, locations)

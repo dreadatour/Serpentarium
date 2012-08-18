@@ -1,0 +1,10 @@
+[
+	{
+		"caption": "-"
+	},
+	{
+		"command": "serpentarium_jump_to_definition",
+		"args": {},
+		"caption": "Jump to Definition"
+	}
+]
