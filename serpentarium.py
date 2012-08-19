@@ -199,8 +199,13 @@ class Serpentarium(object):
         Makes file path nice to show to user.
         """
         # assuming it's our project path
-        project_path = os.path.dirname(self.get_config_file())
-        if project_path in path:
+        try:
+            project_path = self._project_path
+        except AttributeError:
+            self._project_path = os.path.dirname(self.get_config_file())
+            project_path = self._project_path
+
+        if path.startswith(project_path):
             # + 1 for slash
             path = path[len(project_path) + 1:]
         return path
