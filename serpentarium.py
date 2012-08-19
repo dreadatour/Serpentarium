@@ -108,13 +108,19 @@ class Serpentarium(object):
 
         return path
 
-    def get_config_file(self, path=None):
+    def get_config_file(self, path=None, view=None):
         """
         Get config file absolute path
         """
         # get current file name
         if path is None:
-            path = self.window.active_view().file_name()
+            if view is not None:
+                path = view.file_name()
+            else:
+                try:
+                    path = self.view.file_name()
+                except AttributeError:
+                    path = self.window.active_view().file_name()
 
         try:
             if path in self._config_file:
@@ -520,12 +526,13 @@ class SerpentariumSearchDefinition(sublime_plugin.WindowCommand, Serpentarium):
 
         # store current file and position in history
         # FIXME: do we need history here?
-        row, col = self.view.rowcol(self.view.sel()[0].begin())
-        history.append((self.view.file_name(), row + 1, col + 1))
+        view = self.window.active_view()
+        row, col = view.rowcol(view.sel()[0].begin())
+        history.append((view.file_name(), row + 1, col + 1))
 
         # jump to definition
         self.goto_file(
-            view=self.view,
+            view=view,
             filename=self._definitions[choose][1],
             row=self._definitions[choose][2],
             col=0
