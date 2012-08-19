@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import os
-import re
 import json
 import tempfile
 import functools
@@ -80,11 +79,13 @@ class Serpentarium(object):
         ctags_cmd = settings.get('ctags_cmd')
         if ctags_cmd:
             if not os.path.exists(ctags_cmd):
+                # ctags program is not found
                 sublime.error_message((
                     "Ctags is not found in '%s'. Please, install ctags."
                 ) % ctags_cmd)
                 return False
         else:
+            # ctags program is not defined
             sublime.error_message(
                 "Ctags are enabled, but ctags_cmd is not defined in config"
             )
@@ -100,6 +101,7 @@ class Serpentarium(object):
         except TypeError:
             path = self.window.active_view().file_name()
 
+        # normalize given path
         path = os.path.abspath(os.path.normpath(path))
         if os.path.isfile(path):
             path = os.path.dirname(path)
@@ -148,6 +150,7 @@ class Serpentarium(object):
             return None
 
         try:
+            # try to read JSON project config
             with open(config_file) as f:
                 config = f.read()
             return json.loads(config)
@@ -158,19 +161,23 @@ class Serpentarium(object):
         return None
 
     def get_ctags_file(self, path=None):
+        # get project config file
         config_file = self.get_config_file(path)
         if config_file is None:
             return None
         config_dir = os.path.dirname(config_file)
 
+        # parse project config
         config = self.parse_config(path)
         if config is None:
             return None
 
+        # get ctags file filename
         ctags_file = config.get('ctags_file')
         if not ctags_file:
             return None
 
+        # build ctags file path and return it
         ctags_file = os.path.join(config_dir, ctags_file)
         return os.path.abspath(os.path.normpath(ctags_file))
 
@@ -190,9 +197,11 @@ class SerpentariumSetupCommand(sublime_plugin.WindowCommand, Serpentarium):
         """
         Run build command
         """
+        # get project path and config
         path = self.get_path(paths)
         config_file = self.get_config_file(path)
 
+        # check if ctags is fine
         if settings.get('ctags_enabled') and not self.check_ctags():
             return False
 
@@ -211,6 +220,7 @@ class SerpentariumSetupCommand(sublime_plugin.WindowCommand, Serpentarium):
                 with open(config_file, 'w') as write_config:
                     write_config.write(read_config.read())
 
+        # open project config file for edit
         sublime.active_window().open_file(config_file)
 
 
@@ -228,21 +238,31 @@ class SerpentariumRebuildCommand(sublime_plugin.WindowCommand, Serpentarium):
         """
         Run build command
         """
+        # get 'build enabled' settings
         build_ctags = settings.get('ctags_enabled')
         build_cscope = settings.get('cscope_enabled')
 
+        # check if any work needs to be done
         if not build_ctags and not build_cscope:
             return
 
+        # get project path
         path = self.get_path(paths)
 
+        # get project config file
         config_file = self.get_config_file(path)
         if config_file is None:
             return
 
         if build_ctags and not self.check_ctags():
-            return False
+            # something wrong with ctags - don't build it
+            build_ctags = False
 
+        # check if any work steel needs to be done
+        if not build_ctags and not build_cscope:
+            return
+
+        # parse project config
         config = self.parse_config(path)
         if config is None:
             return
@@ -279,29 +299,34 @@ class SerpentariumRebuildCommand(sublime_plugin.WindowCommand, Serpentarium):
         else:
             cscope = None
 
+        # run build process
         self.build_tags(folders, ctags, cscope, silent)
 
     def build_is_done(self, is_ok=False, tags=None, silent=False):
         """
-        Build tags os over - cleanup
+        Build tags is over - cleanup
         """
         if is_ok:
+            # tags rebuilded
             global ctags
             ctags = tags
             if not silent:
                 sublime.status_message('Tags rebuilded')
         else:
+            # error while build tags
             sublime.status_message(
                 'Tags NOT rebuilded! See console for more information.'
             )
 
-    @threaded(finish=build_is_done, msg="Build process is running alredy")
+    @threaded(finish=build_is_done, msg="Build process is running already")
     def build_tags(self, folders=None, ctags=None, cscope=None, silent=False):
         """
         Do build tags hard work in thread
         """
+        # create temporary file for python files list
         tmpfile = tempfile.NamedTemporaryFile(delete=False).name
 
+        # find all python files and save the list into temporary file
         cmd = "find '%s' -type f -name '*.py' > '%s'" % ("' '".join(folders),
                                                          tmpfile)
         p = subprocess.Popen(cmd, shell=1, stdout=subprocess.PIPE,
@@ -311,6 +336,7 @@ class SerpentariumRebuildCommand(sublime_plugin.WindowCommand, Serpentarium):
             raise EnvironmentError((cmd, ret, p.stdout.read()))
 
         if ctags is not None:
+            # build ctags
             cmd = "%s %s --fields=+nz -L '%s' -f '%s'" % (
                 ctags['cmd'],
                 ' '.join(ctags['args']),
@@ -323,8 +349,10 @@ class SerpentariumRebuildCommand(sublime_plugin.WindowCommand, Serpentarium):
             if ret:
                 raise EnvironmentError((cmd, ret, p.stdout.read()))
 
+        # parse builded ctags file
         tags = CTags(tags_file=ctags['out'])
 
+        # remove temporary file
         if tmpfile is not None and os.path.exists(tmpfile):
             os.unlink(tmpfile)
 
@@ -354,7 +382,7 @@ class SerpentariumJumpToDefinition(sublime_plugin.TextCommand, Serpentarium):
 
     def run(self, edit):
         """
-        Run command - let's jump to word under cursor definition!
+        Run command - jump to word under cursor definition
         """
         # skip non-python files
         if not self.view.match_selector(0, 'source.python'):
@@ -370,19 +398,26 @@ class SerpentariumJumpToDefinition(sublime_plugin.TextCommand, Serpentarium):
         if ctags is None:
             ctags = CTags(tags_file=ctags_file)
 
+        # get word under cursor
         symbol = self.view.substr(self.view.word(self.view.sel()[0]))
 
+        # get all definitions of selected word
         definitions = ctags.get_definitions(symbol, self.view)
         if not definitions:
             return sublime.status_message("Can't find '%s'" % symbol)
 
         def select_definition(choose):
+            """
+            Jump to selected definition callback
+            """
             if choose == -1:
                 return
 
+            # store current file and position in history
             row, col = self.view.rowcol(self.view.sel()[0].begin())
             history.append((self.view.file_name(), row + 1, col + 1))
 
+            # jump to definition
             self.goto_file(
                 view=self.view,
                 filename=definitions[choose][1],
@@ -390,10 +425,13 @@ class SerpentariumJumpToDefinition(sublime_plugin.TextCommand, Serpentarium):
                 col=0
             )
 
+        # check settings
         instant_jump = settings.get('instant_jump_to_definition', False)
         if len(definitions) == 1 and instant_jump:
+            # instant jump to definition if such setting and only one result
             select_definition(0)
         else:
+            # else show definitions list
             self.view.window().show_quick_panel(
                 [[d[0], "%d: %s" % (d[2], d[1])] for d in definitions],
                 select_definition
@@ -424,6 +462,7 @@ class SerpentariumJumpBack(sublime_plugin.TextCommand, Serpentarium):
         if not history:
             return sublime.status_message("Jump history is empty")
 
+        # pop last history item and jump to it
         filename, row, col = history.pop()
         self.goto_file(view=self.view, filename=filename, row=row, col=col)
 
@@ -460,6 +499,10 @@ class SerpentariumBackground(sublime_plugin.EventListener, Serpentarium):
         global ctags
         if ctags is None:
             ctags = CTags(tags_file=ctags_file)
+
+        # pt = locations[0] - len(prefix) - 1
+        # ch = view.substr(sublime.Region(pt, pt + 1))
+        # is_dot = (ch == '.')
 
         # do autocomplete work
         return ctags.autocomplete(view, prefix, locations)

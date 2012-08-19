@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
-import time  # XXX: debug
-
-import sublime
+import time  # XXX: profiling
 
 
 class CTags(object):
@@ -13,18 +11,21 @@ class CTags(object):
         """
         Initialize
         """
+        # this is for ctags list
         self._tags = None
 
         if tags_file is not None:
+            # load ctags if ctags file given
             self.load_file(tags_file)
 
     def load_file(self, tags_file):
         """
         Load or reload tags from ctags file
         """
-        time_run = time.time()  # XXX: debug
+        time_run = time.time()  # XXX: profiling
 
         try:
+            # read ctags file and get all lines from file
             all_tags = tuple(l.strip() for l in open(tags_file, 'r'))
         except IOError:
             return False
@@ -35,11 +36,14 @@ class CTags(object):
             if tag_line.startswith('!_'):
                 continue
 
+            # split tags line into fields
             tagname, tagfile, tagaddress, tagfields = tag_line.split('\t', 3)
 
+            # parse tagfields
             if tagfields:
                 fields = {}
                 for field in tagfields.split('\t'):
+                    # parse tagfield name and value
                     if ':' in field:
                         field_name, field_value = field.split(':', 1)
                         if not field_value:
@@ -47,6 +51,9 @@ class CTags(object):
                                 field_value = tagfile
                             else:
                                 field_value = None
+                    elif len(field) == 1:
+                        field_name = 'kind'
+                        field_value = field
                     else:
                         # Something goes wrong!
                         print "[%s] Can't parse line '%s'" % (__name__,
@@ -58,25 +65,24 @@ class CTags(object):
             else:
                 tagfields = {}
 
+            # append parsed tagfield into tags list
             tags.append((tagname, tagfile, tagaddress, tagfields))
         self._tags = tags
 
-        print "Profiling rebuild ctags: %.02fms" % (
-            (time.time() - time_run) * 1000
-        )  # XXX: debug
+        time_run = (time.time() - time_run) * 1000  # XXX: profiling
+        print "[ctags] rebuild: %.02fms" % time_run  # XXX: profiling
 
     def get_definitions(self, symbol, view):
         """
         Find all definitions of word under a cursor and return list of it
         """
-        time_run = time.time()  # XXX: debug
-        print "Jump to definition:", symbol
+        time_run = time.time()  # XXX: profiling
 
         definitions = []
-
         found = False
+
+        # check all tags and search for given symbol
         for tag in self._tags:
-            # if tag[0] == symbol and tag[3]['kind'] != 'v':
             if tag[0] == symbol:
                 definitions.append([
                     tag[2][2:-4].strip(),
@@ -87,9 +93,8 @@ class CTags(object):
             elif found:
                 break
 
-        print "Profiling definitions: %.02fms" % (
-            (time.time() - time_run) * 1000
-        )  # XXX: debug
+        time_run = (time.time() - time_run) * 1000  # XXX: profiling
+        print "[ctags] definitions: %.02fms" % time_run  # XXX: profiling
 
         return definitions
 
@@ -97,16 +102,12 @@ class CTags(object):
         """
         Autocomplete: find all tags with prefix
         """
-        print "Autocomplete", prefix, locations, view.file_name()
-        time_run = time.time()  # XXX: debug
+        time_run = time.time()  # XXX: profiling
 
         completions = []
-
-        pt = locations[0] - len(prefix) - 1
-        ch = view.substr(sublime.Region(pt, pt + 1))
-        is_dot = (ch == '.')
-
         found = False
+
+        # check all tags and search for given prefix
         for tag in self._tags:
             if tag[0].startswith(prefix):
                 completions.append([tag[0]])
@@ -114,12 +115,13 @@ class CTags(object):
             elif found:
                 break
 
+        # prepare completions list for sublime
+        # XXX: move it into serpentarium.py???
         completions = [(i, i) for sublist in completions for i in sublist]
         completions = list(set(completions))
         completions.sort()
 
-        print "Profiling autocomplete: %.02fms" % (
-            (time.time() - time_run) * 1000
-        )  # XXX: debug
+        time_run = (time.time() - time_run) * 1000  # XXX: profiling
+        print "[ctags] autocomplete: %.02fms" % time_run  # XXX: profiling
 
         return completions
