@@ -1,4 +1,5 @@
 [
     { "keys": ["ctrl+]"], "command": "serpentarium_jump_to_definition" },
-    { "keys": ["ctrl+["], "command": "serpentarium_jump_back" }
+    { "keys": ["ctrl+["], "command": "serpentarium_jump_back" },
+    { "keys": ["ctrl+;"], "command": "serpentarium_search_definition" }
 ]

@@ -32,6 +32,10 @@ class CTags(object):
 
         tags = list()
         for tag_line in all_tags:
+            # skip empty lines
+            if not tag_line:
+                continue
+
             # skip ctags comments
             if tag_line.startswith('!_'):
                 continue
@@ -66,39 +70,45 @@ class CTags(object):
                 tagfields = {}
 
             # append parsed tagfield into tags list
-            tags.append((tagname, tagfile, tagaddress, tagfields))
+            tags.append((
+                tagname.decode('utf-8'),
+                tagfile.decode('utf-8'),
+                int(tagfields.get('line', 0)),
+                tagaddress.decode('utf-8'),
+                tagfields
+            ))
         self._tags = tags
 
         time_run = (time.time() - time_run) * 1000  # XXX: profiling
         print "[ctags] rebuild: %.02fms" % time_run  # XXX: profiling
 
-    def get_definitions(self, symbol, view):
+    def get_definitions(self, symbol=None):
         """
         Find all definitions of word under a cursor and return list of it
         """
         time_run = time.time()  # XXX: profiling
 
         definitions = []
-        found = False
 
-        # check all tags and search for given symbol
-        for tag in self._tags:
-            if tag[0] == symbol:
-                definitions.append([
-                    tag[2][2:-4].strip(),
-                    tag[1],
-                    int(tag[3].get('line', 0))
-                ])
-                found = True
-            elif found:
-                break
+        if symbol is None:
+            # return all tags
+            definitions = self._tags
+        else:
+            # check all tags and search for given symbol
+            found = False
+            for tag in self._tags:
+                if tag[0] == symbol:
+                    definitions.append(tag)
+                    found = True
+                elif found:
+                    break
 
         time_run = (time.time() - time_run) * 1000  # XXX: profiling
         print "[ctags] definitions: %.02fms" % time_run  # XXX: profiling
 
         return definitions
 
-    def autocomplete(self, view, prefix, locations):
+    def autocomplete(self, prefix, locations):
         """
         Autocomplete: find all tags with prefix
         """

@@ -402,40 +402,43 @@ class SerpentariumJumpToDefinition(sublime_plugin.TextCommand, Serpentarium):
         symbol = self.view.substr(self.view.word(self.view.sel()[0]))
 
         # get all definitions of selected word
-        definitions = ctags.get_definitions(symbol, self.view)
-        if not definitions:
+        self._definitions = ctags.get_definitions(symbol)
+        if not self._definitions:
             return sublime.status_message("Can't find '%s'" % symbol)
-
-        def select_definition(choose):
-            """
-            Jump to selected definition callback
-            """
-            if choose == -1:
-                return
-
-            # store current file and position in history
-            row, col = self.view.rowcol(self.view.sel()[0].begin())
-            history.append((self.view.file_name(), row + 1, col + 1))
-
-            # jump to definition
-            self.goto_file(
-                view=self.view,
-                filename=definitions[choose][1],
-                row=definitions[choose][2],
-                col=0
-            )
 
         # check settings
         instant_jump = settings.get('instant_jump_to_definition', False)
-        if len(definitions) == 1 and instant_jump:
+        if len(self._definitions) == 1 and instant_jump:
             # instant jump to definition if such setting and only one result
-            select_definition(0)
+            self.select_definition(0)
         else:
             # else show definitions list
-            self.view.window().show_quick_panel(
-                [[d[0], "%d: %s" % (d[2], d[1])] for d in definitions],
-                select_definition
-            )
+            definitions = [[
+                d[3][2:-4].strip(),
+                "%d: %s" % (d[2], d[1])
+            ] for d in self._definitions]
+
+            self.view.window().show_quick_panel(definitions,
+                                                self.select_definition)
+
+    def select_definition(self, choose):
+        """
+        Jump to selected definition callback
+        """
+        if choose == -1:
+            return
+
+        # store current file and position in history
+        row, col = self.view.rowcol(self.view.sel()[0].begin())
+        history.append((self.view.file_name(), row + 1, col + 1))
+
+        # jump to definition
+        self.goto_file(
+            view=self.view,
+            filename=self._definitions[choose][1],
+            row=self._definitions[choose][2],
+            col=0
+        )
 
 
 class SerpentariumJumpBack(sublime_plugin.TextCommand, Serpentarium):
@@ -465,6 +468,68 @@ class SerpentariumJumpBack(sublime_plugin.TextCommand, Serpentarium):
         # pop last history item and jump to it
         filename, row, col = history.pop()
         self.goto_file(view=self.view, filename=filename, row=row, col=col)
+
+
+class SerpentariumSearchDefinition(sublime_plugin.WindowCommand, Serpentarium):
+    """
+    Search definition
+    """
+    def is_enabled(self, paths=None):
+        """
+        Is command active?
+        """
+        # check ctags is exists
+        ctags_file = self.get_ctags_file(self.get_path(paths))
+        if ctags_file is None or not os.path.exists(ctags_file):
+            return False
+        return True
+
+    def run(self, paths=None):
+        """
+        Run command - open search for definition window
+        """
+        # check ctags is exists
+        ctags_file = self.get_ctags_file(self.get_path(paths))
+        if ctags_file is None or not os.path.exists(ctags_file):
+            return []
+
+        # check ctags is prepared - prepare if needed
+        global ctags
+        if ctags is None:
+            ctags = CTags(tags_file=ctags_file)
+
+        # get all definitions of selected word
+        self._definitions = ctags.get_definitions()
+        if not self._definitions:
+            return sublime.status_message("Can't find '%s'" % symbol)
+
+        # else show definitions list
+        definitions = [[
+            d[3][2:-4].strip(),
+            "%d: %s" % (d[2], d[1])
+        ] for d in self._definitions]
+
+        self.window.show_quick_panel(definitions, self.select_definition)
+
+    def select_definition(self, choose):
+        """
+        Jump to selected definition callback
+        """
+        if choose == -1:
+            return
+
+        # store current file and position in history
+        # FIXME: do we need history here?
+        row, col = self.view.rowcol(self.view.sel()[0].begin())
+        history.append((self.view.file_name(), row + 1, col + 1))
+
+        # jump to definition
+        self.goto_file(
+            view=self.view,
+            filename=self._definitions[choose][1],
+            row=self._definitions[choose][2],
+            col=0
+        )
 
 
 class SerpentariumBackground(sublime_plugin.EventListener, Serpentarium):
@@ -505,4 +570,4 @@ class SerpentariumBackground(sublime_plugin.EventListener, Serpentarium):
         # is_dot = (ch == '.')
 
         # do autocomplete work
-        return ctags.autocomplete(view, prefix, locations)
+        return ctags.autocomplete(prefix, locations)
