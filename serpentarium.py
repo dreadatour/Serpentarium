@@ -256,6 +256,14 @@ class SerpentariumRebuildCommand(sublime_plugin.WindowCommand, Serpentarium):
         """
         return self.get_config_file(self.get_path(paths)) is not None
 
+    def is_enabled(self, paths=None):
+        """
+        Is command active?
+        """
+        # check if any file is open
+        if not self.window.active_view():
+            return False
+
     def run(self, paths=None, silent=False):
         """
         Run build command
@@ -396,6 +404,10 @@ class SerpentariumJumpToDefinition(sublime_plugin.TextCommand, Serpentarium):
         """
         Is command active?
         """
+        # check if any file is open
+        if not self.view:
+            return False
+
         # check ctags is exists
         ctags_file = self.get_ctags_file(self.view.file_name())
         if ctags_file is None or not os.path.exists(ctags_file):
@@ -478,6 +490,10 @@ class SerpentariumJumpBack(sublime_plugin.TextCommand, Serpentarium):
         """
         Is command active?
         """
+        # check if any file is open
+        if not self.view:
+            return False
+
         return True if history else False
 
     def run(self, edit):
@@ -500,10 +516,15 @@ class SerpentariumSearchDefinition(sublime_plugin.WindowCommand, Serpentarium):
         """
         Is command active?
         """
+        # check if any file is open
+        if not self.window.active_view():
+            return False
+
         # check ctags is exists
         ctags_file = self.get_ctags_file(self.get_path(paths))
         if ctags_file is None or not os.path.exists(ctags_file):
             return False
+
         return True
 
     def run(self, paths=None):
