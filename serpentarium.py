@@ -194,6 +194,17 @@ class Serpentarium(object):
         view.window().open_file("%s:%d:%d" % (filename, row, col),
                                 sublime.ENCODED_POSITION)
 
+    def prettify_path(self, path):
+        """
+        Makes file path nice to show to user.
+        """
+        # assuming it's our project path
+        project_path = os.path.dirname(self.get_config_file())
+        if project_path in path:
+            # + 1 for slash
+            path = path[len(project_path) + 1:]
+        return path
+
 
 class SerpentariumSetupCommand(sublime_plugin.WindowCommand, Serpentarium):
     """
@@ -421,7 +432,7 @@ class SerpentariumJumpToDefinition(sublime_plugin.TextCommand, Serpentarium):
             # else show definitions list
             definitions = [[
                 d[3][2:-4].strip(),
-                "%d: %s" % (d[2], d[1])
+                "%d: %s" % (d[2], self.prettify_path(d[1]))
             ] for d in self._definitions]
 
             self.view.window().show_quick_panel(definitions,
@@ -512,7 +523,7 @@ class SerpentariumSearchDefinition(sublime_plugin.WindowCommand, Serpentarium):
         # else show definitions list
         definitions = [[
             d[3][2:-4].strip(),
-            "%d: %s" % (d[2], d[1])
+            "%d: %s" % (d[2], self.prettify_path(d[1]))
         ] for d in self._definitions]
 
         self.window.show_quick_panel(definitions, self.select_definition)
