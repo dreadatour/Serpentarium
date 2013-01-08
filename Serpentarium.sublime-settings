@@ -1,5 +1,8 @@
 {
-	// This file will be created in project dir
+	// Print profiling info
+	"debug": true,
+
+	// This config file will be created in project dir
 	"project_config_filename": "serpentarium.json",
 	// Jump to definition without prompt if only one result
 	"instant_jump_to_definition": true,
@@ -10,11 +13,5 @@
 	"ctags_args": [
 		"--python-kinds=-i"
 	],
-	"ctags_rebuild_on_save": true,
-
-	// CScope settings
-	"cscope_enabled": true,
-	"cscope_cmd": "/usr/local/bin/cscope",
-	"cscope_args": [],
-	"cscope_rebuild_on_save": true
+	"ctags_rebuild_on_save": true
 }

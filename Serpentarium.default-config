@@ -1,6 +1,5 @@
 {
 	"ctags_file": "serpentarium.ctags",
-	"cscope_file": "serpentarium.cscope",
 	"include_dirs": [
 	],
 	"exclude_dirs": [

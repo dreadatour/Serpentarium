@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
-import time  # XXX: profiling
+"""
+Work with ctags file
+"""
+import time  # profiling
 
 
 class CTags(object):
@@ -7,12 +10,13 @@ class CTags(object):
     Work with ctags file
     """
 
-    def __init__(self, tags_file=None):
+    def __init__(self, tags_file=None, debug=False):
         """
         Initialize
         """
         # this is for ctags list
         self._tags = None
+        self._debug = debug
 
         if tags_file is not None:
             # load ctags if ctags file given
@@ -22,7 +26,8 @@ class CTags(object):
         """
         Load or reload tags from ctags file
         """
-        time_run = time.time()  # XXX: profiling
+        if self._debug:  # profiling
+            timing = time.time()
 
         try:
             # read ctags file and get all lines from file
@@ -32,12 +37,8 @@ class CTags(object):
 
         tags = list()
         for tag_line in all_tags:
-            # skip empty lines
-            if not tag_line:
-                continue
-
-            # skip ctags comments
-            if tag_line.startswith('!_'):
+            # skip empty lines and ctags comments
+            if not tag_line or tag_line.startswith('!_'):
                 continue
 
             # split tags line into fields
@@ -79,14 +80,16 @@ class CTags(object):
             ))
         self._tags = tags
 
-        time_run = (time.time() - time_run) * 1000  # XXX: profiling
-        print "[ctags] rebuild: %.02fms" % time_run  # XXX: profiling
+        if self._debug:  # profiling
+            timing = (time.time() - timing) * 1000
+            print "[ctags] rebuild: %.02fms" % timing
 
     def get_definitions(self, symbol=None):
         """
         Find all definitions of word under a cursor and return list of it
         """
-        time_run = time.time()  # XXX: profiling
+        if self._debug:  # profiling
+            timing = time.time()
 
         definitions = []
 
@@ -103,16 +106,18 @@ class CTags(object):
                 elif found:
                     break
 
-        time_run = (time.time() - time_run) * 1000  # XXX: profiling
-        print "[ctags] definitions: %.02fms" % time_run  # XXX: profiling
+        if self._debug:  # profiling
+            timing = (time.time() - timing) * 1000
+            print "[ctags] definitions: %.02fms" % timing
 
         return definitions
 
-    def autocomplete(self, prefix, locations):
+    def autocomplete(self, prefix):
         """
         Autocomplete: find all tags with prefix
         """
-        time_run = time.time()  # XXX: profiling
+        if self._debug:  # profiling
+            timing = time.time()
 
         completions = []
         found = False
@@ -126,12 +131,12 @@ class CTags(object):
                 break
 
         # prepare completions list for sublime
-        # XXX: move it into serpentarium.py???
         completions = [(i, i) for sublist in completions for i in sublist]
         completions = list(set(completions))
         completions.sort()
 
-        time_run = (time.time() - time_run) * 1000  # XXX: profiling
-        print "[ctags] autocomplete: %.02fms" % time_run  # XXX: profiling
+        if self._debug:  # profiling
+            timing = (time.time() - timing) * 1000
+            print "[ctags] autocomplete: %.02fms" % timing
 
         return completions

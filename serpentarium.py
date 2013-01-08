@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
+"""
+Serpentarium is a Sublime Text 2 plugin for work with ctags in Python files.
+"""
 import os
+import time
 import json
 import tempfile
 import functools
@@ -12,6 +16,7 @@ import sublime_plugin
 from ctags import CTags
 
 settings = sublime.load_settings("Serpentarium.sublime-settings")
+is_debug = lambda: settings.get('debug', False)
 
 ctags = None
 history = []
@@ -31,14 +36,12 @@ def threaded(finish=None, msg="Thread already running"):
                     result = func(*args, **kwargs)
                     if result is None:
                         result = ()
-
                     elif not isinstance(result, tuple):
                         result = (result,)
 
                     if finish:
                         sublime.set_timeout(
-                            functools.partial(finish, args[0], *result),
-                            0
+                            functools.partial(finish, args[0], *result), 0
                         )
                 finally:
                     func.running = 0
@@ -49,8 +52,10 @@ def threaded(finish=None, msg="Thread already running"):
                 t.start()
             else:
                 sublime.status_message(msg)
+
         threaded.func = func
         return threaded
+
     return decorator
 
 
@@ -79,13 +84,13 @@ class Serpentarium(object):
         ctags_cmd = settings.get('ctags_cmd')
         if ctags_cmd:
             if not os.path.exists(ctags_cmd):
-                # ctags program is not found
+                # ctags is not found
                 sublime.error_message((
                     "Ctags is not found in '%s'. Please, install ctags."
                 ) % ctags_cmd)
                 return False
         else:
-            # ctags program is not defined
+            # ctags is not defined
             sublime.error_message(
                 "Ctags are enabled, but ctags_cmd is not defined in config"
             )
@@ -167,6 +172,9 @@ class Serpentarium(object):
         return None
 
     def get_ctags_file(self, path=None):
+        """
+        Get absolute filename for ctags cache file
+        """
         # get project config file
         config_file = self.get_config_file(path)
         if config_file is None:
@@ -178,7 +186,7 @@ class Serpentarium(object):
         if config is None:
             return None
 
-        # get ctags file filename
+        # get ctags filename
         ctags_file = config.get('ctags_file')
         if not ctags_file:
             return None
@@ -248,7 +256,7 @@ class SerpentariumSetupCommand(sublime_plugin.WindowCommand, Serpentarium):
 
 class SerpentariumRebuildCommand(sublime_plugin.WindowCommand, Serpentarium):
     """
-    Rebuild ctags and/or cscope tags
+    Rebuild ctags
     """
     def is_visible(self, paths=None):
         """
@@ -261,19 +269,14 @@ class SerpentariumRebuildCommand(sublime_plugin.WindowCommand, Serpentarium):
         Is command active?
         """
         # check if any file is open
-        if not self.window.active_view():
-            return False
+        return bool(self.window.active_view())
 
     def run(self, paths=None, silent=False):
         """
         Run build command
         """
-        # get 'build enabled' settings
-        build_ctags = settings.get('ctags_enabled')
-        build_cscope = settings.get('cscope_enabled')
-
         # check if any work needs to be done
-        if not build_ctags and not build_cscope:
+        if not settings.get('ctags_enabled'):
             return
 
         # get project path
@@ -284,12 +287,8 @@ class SerpentariumRebuildCommand(sublime_plugin.WindowCommand, Serpentarium):
         if config_file is None:
             return
 
-        if build_ctags and not self.check_ctags():
+        if not self.check_ctags():
             # something wrong with ctags - don't build it
-            build_ctags = False
-
-        # check if any work steel needs to be done
-        if not build_ctags and not build_cscope:
             return
 
         # parse project config
@@ -311,31 +310,22 @@ class SerpentariumRebuildCommand(sublime_plugin.WindowCommand, Serpentarium):
                     )
 
         # get ctags params
-        if build_ctags:
-            ctags = {
-                "cmd": settings.get('ctags_cmd'),
-                "args": settings.get('ctags_args'),
-                "out": self.get_ctags_file(path),
-            }
-        else:
-            ctags = None
-
-        # get cscope params
-        if build_cscope:
-            cscope = {
-                "cmd": settings.get('cscope_cmd'),
-                #"out": self.get_cscope_file(path)
-            }
-        else:
-            cscope = None
+        ctags = {
+            "cmd": settings.get('ctags_cmd'),
+            "args": settings.get('ctags_args'),
+            "out": self.get_ctags_file(path),
+        }
 
         # run build process
-        self.build_tags(folders, ctags, cscope, silent)
+        self.build_tags(folders, ctags, silent)
 
-    def build_is_done(self, is_ok=False, tags=None, silent=False):
+    def build_is_done(self, is_ok=False, tags=None, silent=False, timing=None):
         """
         Build tags is over - cleanup
         """
+        if is_debug:  # profiling
+            print "[total] rebuild: %.02fms" % (timing * 1000)
+
         if is_ok:
             # tags rebuilded
             global ctags
@@ -349,10 +339,12 @@ class SerpentariumRebuildCommand(sublime_plugin.WindowCommand, Serpentarium):
             )
 
     @threaded(finish=build_is_done, msg="Build process is running already")
-    def build_tags(self, folders=None, ctags=None, cscope=None, silent=False):
+    def build_tags(self, folders=None, ctags=None, silent=False):
         """
         Do build tags hard work in thread
         """
+        timing = time.time()  # profiling
+
         # create temporary file for python files list
         tmpfile = tempfile.NamedTemporaryFile(delete=False).name
 
@@ -380,13 +372,13 @@ class SerpentariumRebuildCommand(sublime_plugin.WindowCommand, Serpentarium):
                 raise EnvironmentError((cmd, ret, p.stdout.read()))
 
         # parse builded ctags file
-        tags = CTags(tags_file=ctags['out'])
+        tags = CTags(tags_file=ctags['out'], debug=is_debug)
 
         # remove temporary file
         if tmpfile is not None and os.path.exists(tmpfile):
             os.unlink(tmpfile)
 
-        return True, tags, silent
+        return True, tags, silent, (time.time() - timing)
 
 
 class SerpentariumJumpToDefinition(sublime_plugin.TextCommand, Serpentarium):
@@ -430,7 +422,7 @@ class SerpentariumJumpToDefinition(sublime_plugin.TextCommand, Serpentarium):
         # check ctags is prepared - prepare if needed
         global ctags
         if ctags is None:
-            ctags = CTags(tags_file=ctags_file)
+            ctags = CTags(tags_file=ctags_file, debug=is_debug)
 
         # get word under cursor
         symbol = self.view.substr(self.view.word(self.view.sel()[0]))
@@ -494,7 +486,7 @@ class SerpentariumJumpBack(sublime_plugin.TextCommand, Serpentarium):
         if not self.view:
             return False
 
-        return True if history else False
+        return bool(history)
 
     def run(self, edit):
         """
@@ -520,6 +512,10 @@ class SerpentariumSearchDefinition(sublime_plugin.WindowCommand, Serpentarium):
         if not self.window.active_view():
             return False
 
+        # check if ctags is enabled
+        if not settings.get('ctags_enabled', False):
+            return
+
         # check ctags is exists
         ctags_file = self.get_ctags_file(self.get_path(paths))
         if ctags_file is None or not os.path.exists(ctags_file):
@@ -539,12 +535,13 @@ class SerpentariumSearchDefinition(sublime_plugin.WindowCommand, Serpentarium):
         # check ctags is prepared - prepare if needed
         global ctags
         if ctags is None:
-            ctags = CTags(tags_file=ctags_file)
+            ctags = CTags(tags_file=ctags_file, debug=is_debug)
 
         # get all definitions of selected word
         self._definitions = ctags.get_definitions()
         if not self._definitions:
-            return sublime.status_message("Can't find '%s'" % symbol)
+            # return sublime.status_message("Can't find '%s'" % symbol)
+            return
 
         # else show definitions list
         definitions = [[
@@ -562,7 +559,6 @@ class SerpentariumSearchDefinition(sublime_plugin.WindowCommand, Serpentarium):
             return
 
         # store current file and position in history
-        # FIXME: do we need history here?
         view = self.window.active_view()
         row, col = view.rowcol(view.sel()[0].begin())
         history.append((view.file_name(), row + 1, col + 1))
@@ -582,13 +578,15 @@ class SerpentariumBackground(sublime_plugin.EventListener, Serpentarium):
     """
     def on_post_save(self, view):
         """
-        Rebuild ctags and cscope on python source file save
+        Rebuild ctags on python source file save
         """
         # skip non-python files
         if not view.match_selector(0, 'source.python'):
             return
 
-        # TODO: respect 'XXX_rebuild_on_save' setting
+        if not settings.get('ctags_rebuild_on_save', False):
+            return
+
         view.window().run_command('serpentarium_rebuild', {'silent': True})
 
     def on_query_completions(self, view, prefix, locations):
@@ -607,11 +605,11 @@ class SerpentariumBackground(sublime_plugin.EventListener, Serpentarium):
         # check ctags is prepared - prepare if needed
         global ctags
         if ctags is None:
-            ctags = CTags(tags_file=ctags_file)
+            ctags = CTags(tags_file=ctags_file, debug=is_debug)
 
         # pt = locations[0] - len(prefix) - 1
         # ch = view.substr(sublime.Region(pt, pt + 1))
         # is_dot = (ch == '.')
 
         # do autocomplete work
-        return ctags.autocomplete(prefix, locations)
+        return ctags.autocomplete(prefix)
