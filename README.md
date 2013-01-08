@@ -1,16 +1,16 @@
 Serpentarium
 ============
 
-Serpentarium is a Sublime Text 2 plugin for work with ctags and cscope in Python files.
+Serpentarium is a Sublime Text 2 plugin for work with ctags in Python files.
 
 Install
 -------
 
-First, install ctags and cscope.
+First, install ctags.
 
 * OS X:
 
-		brew install ctags cscope
+		brew install ctags
 
 * Linux & Windows:
 
@@ -42,3 +42,7 @@ Features / Usage
 ----------------
 
 Right-click on your project folder in sidebar menu and choose "Serpentarium: Setup project".
+Right-click on your project folder in sidebar menu and choose "Serpentarium: Rebuild tags".
+
+Now, use 'ctrl+]' for go to function under cursor definition and 'ctrl_[' for jump back.
+Also, you can use 'ctrl+;' for search for definitions in whole project.
