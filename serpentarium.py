@@ -3,6 +3,7 @@
 Serpentarium is a Sublime Text 2 plugin for work with ctags in Python files.
 """
 import os
+import re
 import time
 import json
 import tempfile
@@ -570,6 +571,98 @@ class SerpentariumSearchDefinition(sublime_plugin.WindowCommand, Serpentarium):
             row=self._definitions[choose][2],
             col=0
         )
+
+
+class SerpentariumParentsThread(sublime_plugin.TextCommand):
+    """
+    Show thread with all parents for code in current line
+    """
+    def is_visible(self):
+        """
+        Is command visible?
+        """
+        # skip non-python files
+        return self.view.match_selector(0, 'source.python')
+
+    def is_enabled(self):
+        """
+        Is command active?
+        """
+        # skip non-python files
+        return self.view.match_selector(0, 'source.python')
+
+    def run(self, edit):
+        """
+        Run command - show thread
+        """
+        # skip non-python files
+        if not self.view.match_selector(0, 'source.python'):
+            return
+
+        # regex for parse line indent
+        line_re = r"^([ \t]*)\S"
+
+        result = []
+        last_indent = None
+
+        # get current line number
+        line_number = self.view.rowcol(self.view.sel()[0].end())[0]
+
+        # parse each line above current
+        while line_number > 0:
+            # get line
+            text_point = self.view.text_point(line_number, 0)
+            line_text = self.view.substr(self.view.line(text_point))
+
+            # match line indent
+            match = re.search(line_re, line_text)
+            if match:
+                indent = len(match.group(1))
+
+                # if indent is changed - store line
+                if last_indent is None or indent < last_indent:
+                    result.append((line_number, indent, line_text.strip()))
+                    last_indent = indent
+
+                # if we reached top parent - break
+                if indent == 0:
+                    break
+
+            # parse everyline till file beginning
+            line_number -= 1
+
+        if not result:
+            return
+
+        # reverse result and strip current line
+        self.parents_list = result[1:][::-1]
+
+        # build parents list to show in quick panel
+        parents = []
+        for i in range(len(self.parents_list)):
+            parent = self.parents_list[i]
+            parents.append("%s: %s%s" % (parent[0] + 1, ' ' * i, parent[2]))
+
+        # view panel for choose parent
+        self.view.window().show_quick_panel(parents, self.select_parent,
+                                            sublime.MONOSPACE_FONT)
+
+    def select_parent(self, choose):
+        """
+        Jump to selected parent callback
+        """
+        if choose == -1:
+            return
+
+        # reset selection
+        selection = self.view.sel()
+        selection.clear()
+
+        # go to parent
+        parent = self.parents_list[choose]
+        region_begin = self.view.text_point(parent[0], parent[1])
+        selection.add(sublime.Region(region_begin, region_begin))
+        self.view.show_at_center(region_begin)
 
 
 class SerpentariumBackground(sublime_plugin.EventListener, Serpentarium):
