@@ -45,4 +45,5 @@ Right-click on your project folder in sidebar menu and choose "Serpentarium: Set
 Right-click on your project folder in sidebar menu and choose "Serpentarium: Rebuild tags".
 
 Now, use 'ctrl+]' for go to function under cursor definition and 'ctrl_[' for jump back.
+
 Also, you can use 'ctrl+;' for search for definitions in whole project.
