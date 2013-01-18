@@ -47,3 +47,5 @@ Right-click on your project folder in sidebar menu and choose "Serpentarium: Reb
 Now, use 'ctrl+]' for go to function under cursor definition and 'ctrl_[' for jump back.
 
 Also, you can use 'ctrl+;' for search for definitions in whole project.
+
+Also, you can use 'ctlr+\' for walk through parent classes/functions definitions.
